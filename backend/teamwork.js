@@ -111,6 +111,8 @@ export async function registerWebhook(eventId) {
     webhook: {
       event: name,
       url,
+      version: 2,
+      contentType: 'application/json',
     },
   });
   return await update(`${hooksKey}${id}`, (old) =>

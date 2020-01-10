@@ -17,8 +17,6 @@ import {
 
 import './styles/App.css';
 
-
-// ({ name, url, id, eventId }));
 const EventColumn = ({
   chunk,
   eventHasHook,

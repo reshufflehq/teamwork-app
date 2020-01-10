@@ -43,11 +43,26 @@ export async function createWorksheetByTitle(sheetTitle, headers) {
 }
 
 export async function addWSEntry(sheetTitle, kVData) {
-  const headers = Object.keys(kVData);
+  let dataCopy = { ...kVData };
+  if (dataCopy.id) {
+    const id = dataCopy.id;
+    delete dataCopy.id;
+    dataCopy = { Id: id, ...dataCopy };
+  }
+
+  const headers = Object.keys(dataCopy);
+  headers.forEach((key) => {
+    const value = dataCopy[key];
+    const jsonTypes = [undefined, null, [], ''];
+    if (jsonTypes.includes(value) || Array.isArray(value)) {
+      dataCopy[key] = JSON.stringify(dataCopy[key]);
+    }
+  });
+
   const worksheet = await createWorksheetByTitle(
     sheetTitle, headers);
   if (worksheet) {
     const addRowAsync = promisify(worksheet.addRow);
-    await addRowAsync(kVData);
+    await addRowAsync(dataCopy);
   }
 }

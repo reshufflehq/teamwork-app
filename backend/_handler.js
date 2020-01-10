@@ -25,9 +25,11 @@ app.use('*', async (req, res, next) => {
   const hookExists = await hookByName(eventName);
   if (hookExists) {
     const sheetName = `${eventName} events`;
-    delete req.body.event;
+    const eventType = req.headers['x-projects-event'];
+    const eventBase = eventType.split('.')[0].toLowerCase();
+    const relevantBody = req.body[eventBase];
     const workSheet =
-      await addWSEntry(sheetName, req.body);
+      await addWSEntry(sheetName, relevantBody);
     res.status(200).json('ok');
   } else {
     next();
