@@ -43,6 +43,13 @@ const getCells = (doc, opts) => new Promise((resolve, reject) => {
   });
 });
 
+const getRows = (doc, opts) => new Promise((resolve, reject) => {
+  doc.getRows(opts, (err, rows) => {
+    if (err) reject(err);
+    resolve(rows);
+  });
+});
+
 const bulkUpdateCells = (doc, cells) => new Promise((resolve, reject) => {
   doc.bulkUpdateCells(cells, (err, upd) => {
     if (err) reject(err);
@@ -64,6 +71,27 @@ export async function addRowsBulk(worksheet, rows) {
      return bulkUpdateCells(worksheet, cells);
    });
 };
+
+export async function updateRowBulk(worksheet, row) {
+  const doc = await getWorksheetByTitle(worksheet);
+  if (!doc) {
+    console.error(`No worsheet with title: ${worksheet} exists`);
+    return;
+  }
+  const query = `id=${row.Id}`;
+  const rows = await getRows(doc, {
+    offset: 1,
+    query: '(' + query + ')',
+  });
+  const sheetRow = rows[0];
+  const keys = await Object.keys(row);
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    sheetRow[key] = row[key];
+  }
+  const saveAsync = promisify(sheetRow.save);
+  await saveAsync();
+}
 
 export async function getAllWSRows(sheetTitle) {
   const existing = await getWorksheetByTitle(sheetTitle);

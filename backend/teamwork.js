@@ -7,6 +7,7 @@ import {
   createAndClearWS,
   createWorksheetByTitle,
   getAllWSRows,
+  updateRowBulk,
 } from './sheet';
 
 const tmAPIKey = process.env.TEAMWORK_API_KEY;
@@ -191,6 +192,41 @@ function makeTaskRow(data) {
   }, {});
 }
 
+const normalize = (row) => {
+  const rowKeys = Object.keys(row);
+  const copy = { ...row };
+  rowKeys.forEach((key) => {
+    if (copy[key] === undefined) {
+      delete copy[key];
+    } else if (copy[key] === 'FALSE') {
+      copy[key] = false;
+    } else if (copy[key] === 'TRUE') {
+      copy[key] = true;
+    }
+  });
+  return copy;
+}
+
+const compareRows = (row0, row1) => {
+
+  const filteredRow0 = normalize(row0);
+  const filteredRow1 = normalize(row1);
+  const row0Keys = Object.keys(filteredRow0);
+  const row1Keys = Object.keys(filteredRow1);
+  const keysSame = row0Keys.length === row1Keys.length &&
+    row0Keys.every((key) => row1Keys.includes(key));
+  if (!keysSame) {
+    return false;
+  }
+  let areSame = true;
+  row0Keys.forEach((key) => {
+    if (filteredRow0[key] !== filteredRow1[key]) {
+      areSame = false;
+    }
+  });
+  return areSame;
+};
+
 export async function handleMaybeTask(hook, body) {
   const taskSync = await getTaskSync();
   if (!taskSync) {
@@ -201,7 +237,14 @@ export async function handleMaybeTask(hook, body) {
     return;
   }
 
-  const taskOp = hook.name.slice(5, hook.name.length);
+  let taskOp = hook.name.slice(5, hook.name.length);
+
+  if (taskOp === 'REOPENED') {
+    const id = body.id;
+    const exists = await get(`${tasksKey}${projectId}${body.id}`);
+    taskOp = exists ? 'UPDATED' : 'CREATED';
+  }
+
   if (taskOp === 'CREATED') {
     const insertRow = makeTaskRow(body);
     const workSheet =
@@ -215,8 +258,16 @@ export async function handleMaybeTask(hook, body) {
     await update(`${tasksKey}${projectId}${body.id}`,
       () => castRow);
   } else if (taskOp === 'UPDATED') {
-  } else if (taskOp === 'REOPENED') {
-
+    const insertRow = makeTaskRow(body);
+    const existing = await get(`${tasksKey}${projectId}${insertRow.Id}`);
+    const same = compareRows(insertRow, existing);
+    if (same) {
+      console.log('No change detected in row');
+      return;
+    }
+    const rows = await updateRowBulk(taskSheetTitle, insertRow);
+    await update(`${tasksKey}${projectId}${insertRow.Id}`,
+      () => insertRow);
   }
 }
 
@@ -229,10 +280,26 @@ const createOrderedRows = (data) => {
 }
 
 /* @expose */
+export async function removeStoredTasks() {
+  const stored = await find(
+    Q.filter(
+      Q.key.startsWith(
+        `${tasksKey}${projectId}`
+      )
+    )
+  );
+
+  for (let i = 0; i < stored.length; i += 1) {
+    await remove(stored[i].key);
+  }
+}
+
+/* @expose */
 export async function setTaskSync(taskSync) {
   await update(`${taskSyncKey}${projectId}`,
     (oldSync) => taskSync);
   if (taskSync) {
+    await removeStoredTasks();
     const allTasks = await getAllTasksForProject();
     const ws = await createAndClearWS(taskSheetTitle, sheetFields);
     const orderedRows = createOrderedRows(allTasks);
