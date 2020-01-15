@@ -1,6 +1,12 @@
 import '@reshuffle/code-transform/macro'
 import React, { useEffect, useState } from 'react';
 
+import {
+  Switch,
+  Route,
+  Link,
+} from 'react-router-dom';
+
 import Checkbox from '@material-ui/core/Checkbox';
 import FormControlLabel from '@material-ui/core/FormControlLabel';
 
@@ -9,6 +15,8 @@ import {
   getAllHooks,
   registerWebhook,
   removeWebhook,
+  getTaskSync,
+  setTaskSync,
 } from '../backend/teamwork';
 
 import {
@@ -52,7 +60,6 @@ const EventColumn = ({
 const EventCheck = () => {
   const [catalog, setCatalog] = useState([]);
   const [hooks, setHooks] = useState([]);
-  const [isByCat, setByCat] = useState(false);
   const [sheetUrl, setSheetUrl] = useState(undefined);
   useEffect(() => {
     async function load() {
@@ -71,7 +78,6 @@ const EventCheck = () => {
   };
 
   const handleCheckChange = async (id, currState) => {
-    console.log(currState);
     if (currState) {
       await removeWebhook(id)
       const filteredHooks = hooks.filter(({ eventId }) =>
@@ -126,10 +132,60 @@ const EventCheck = () => {
   );
 };
 
+function MainPanel() {
+  const [taskSync, setSync] = useState(undefined);
+  useEffect(() => {
+    async function load() {
+      const sync = await getTaskSync();
+      setSync(sync);
+    }
+    load();
+  }, []);
+  if (taskSync === undefined) {
+    return null;
+  }
+
+  const handleCheckChange = async () => {
+    await setTaskSync(!taskSync);
+    setSync(!taskSync);
+  };
+
+  return (
+    <div className='task-panel'>
+      <div className='task-control'>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={taskSync}
+              onChange={(evt) => {
+                evt.preventDefault();
+                handleCheckChange();
+              }}
+              value='Enable task syncing'
+            />
+          }
+          label='Enable task syncing'
+        />
+        <Link to='/event-control' className='task-link'>
+          (Advanced) Event controls
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   return (
     <div className='App'>
-      <EventCheck/>
+      <Switch>
+        <Route
+          path='/event-control'
+          component={EventCheck}
+        />
+        <Route
+          component={MainPanel}
+        />
+      </Switch>
     </div>
   );
 }
