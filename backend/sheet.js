@@ -29,7 +29,54 @@ export async function getWorksheetByTitle(sheetTitle) {
   return wS.filter(({ title }) => title === sheetTitle)[0];
 }
 
-export async function createWorksheetByTitle(sheetTitle, headers) {
+const createRowOptions = (data) => ({
+  'return-empty': true,
+  'max-col': data[0].length - 1,
+  'min-row': 2,
+  'max-row': data.length + 1,
+});
+
+const getCells = (doc, opts) => new Promise((resolve, reject) => {
+  doc.getCells(opts, (err, cells) => {
+    if (err) reject(err);
+    resolve(cells);
+  });
+});
+
+const bulkUpdateCells = (doc, cells) => new Promise((resolve, reject) => {
+  doc.bulkUpdateCells(cells, (err, upd) => {
+    if (err) reject(err);
+    resolve(upd);
+  });
+});
+
+export async function addRowsBulk(worksheet, rows) {
+  const opts = createRowOptions(rows);
+  return getCells(worksheet, opts)
+   .then((cells) => {
+     cells.forEach((cell, i) => {
+       try {
+         cell.value = String(rows[cell.row - 2][cell.col]);
+       } catch (e) {
+         console.log(`NOT FOUND ${i} : R${cell.row} C${cell.col} rows:${rows.length}`);
+       }
+     });
+     return bulkUpdateCells(worksheet, cells);
+   });
+};
+
+export async function getAllWSRows(sheetTitle) {
+  const existing = await getWorksheetByTitle(sheetTitle);
+  if (!existing) {
+    throw new Error('No worksheet exists with that name');
+  }
+  const getRowsAsync = promisify(existing.getRows);
+  return await getRowsAsync({
+    offset: 1,
+  });
+}
+
+export async function createWorksheetByTitle(sheetTitle, headers, clearFirst) {
   const existing = await getWorksheetByTitle(sheetTitle);
   const addWSAsync = promisify(doc.addWorksheet);
   if (!existing) {
@@ -38,8 +85,22 @@ export async function createWorksheetByTitle(sheetTitle, headers) {
       headers,
     });
     return workSheet;
+  } else if (clearFirst) {
+    const clearAsync = promisify(existing.clear);
+    await clearAsync();
+    const resizeAsync = promisify(existing.resize);
+    await resizeAsync({
+      colCount: headers.length,
+      rowCount: 10000,
+    });
+    const setHeaderAsync = promisify(existing.setHeaderRow);
+    await setHeaderAsync(headers);
   }
   return existing;
+}
+
+export async function createAndClearWS(sheetTitle, headers) {
+  return await createWorksheetByTitle(sheetTitle, headers, true);
 }
 
 export async function addWSEntry(sheetTitle, kVData) {
