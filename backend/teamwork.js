@@ -239,8 +239,7 @@ export async function handleMaybeTask(hook, body) {
 
   let taskOp = hook.name.slice(5, hook.name.length);
 
-  if (taskOp === 'REOPENED') {
-    const id = body.id;
+  if (taskOp === 'REOPENED' || taskOp === 'CREATED') {
     const exists = await get(`${tasksKey}${projectId}${body.id}`);
     taskOp = exists ? 'UPDATED' : 'CREATED';
   }
